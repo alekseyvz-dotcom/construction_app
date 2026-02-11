@@ -1,6 +1,6 @@
 """
 Главное окно приложения.
-Содержит меню, хедер, контентную область и футер.
+Кастомная навигационная панель, хедер, контент, футер.
 """
 import logging
 from typing import Dict, Any, Optional, Callable
@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional, Callable
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QMenu, QStackedWidget,
-    QMessageBox, QStatusBar,
+    QMessageBox, QStatusBar, QPushButton, QFrame,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QFont
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 APP_NAME = "Управление строительством"
 
 PAGE_HEADERS: Dict[str, tuple] = {
-    "home": ("Управление строительством", "Выберите раздел в верхнем меню"),
+    "home": ("Управление строительством", "Выберите раздел в меню навигации"),
     "login": ("Управление строительством", "Вход в систему"),
     "timesheet": ("Объектный табель", ""),
     "my_timesheets": ("Мои табели", ""),
@@ -54,6 +54,18 @@ PAGE_HEADERS: Dict[str, tuple] = {
     "analytics_dashboard": ("Операционная аналитика", "Сводные показатели"),
 }
 
+# Иконки-эмодзи для секций меню (можно заменить на QIcon)
+SECTION_ICONS = {
+    "Объектный табель": "📋",
+    "Автотранспорт": "🚛",
+    "Питание": "🍽",
+    "Проживание": "🏠",
+    "Объекты": "🏗",
+    "Сотрудники": "👤",
+    "Аналитика": "📊",
+    "Инструменты": "🔧",
+}
+
 
 class MainWindow(QMainWindow):
 
@@ -64,19 +76,26 @@ class MainWindow(QMainWindow):
         self.resize(1100, 768)
         self.setStyleSheet(MAIN_STYLESHEET)
 
-        # === ВСЕ атрибуты инициализируются ДО любых вызовов ===
+        # === Атрибуты ===
         self.current_user: Dict[str, Any] = {}
         self.is_authenticated: bool = False
         self._page_builders: Dict[str, Callable] = {}
         self._page_headers: Dict[str, tuple] = dict(PAGE_HEADERS)
-        self._menu_actions: Dict[str, QAction] = {}
-        self._section_menus: Dict[str, QMenu] = {}
         self._pages_cache: Dict[str, QWidget] = {}
-        self._navigating: bool = False  # защита от рекурсии
+        self._navigating: bool = False
+
+        # Для управления правами: section_label -> (QPushButton, QMenu)
+        self._nav_buttons: Dict[str, QPushButton] = {}
+        self._nav_menus: Dict[str, QMenu] = {}
+        self._menu_actions: Dict[str, QAction] = {}
+        self._settings_btn: Optional[QPushButton] = None
+        self._logout_btn: Optional[QPushButton] = None
+
+        # === Убираем стандартный menubar ===
+        self.menuBar().setVisible(False)
 
         # === Строим UI ===
         self._build_central_widget()
-        self._build_menu()
         self._build_statusbar()
 
         # === Показываем логин ===
@@ -94,10 +113,15 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Хедер
+        # ── Навбар ───────────────────────────────────────────────
+        self.navbar = self._build_navbar()
+        main_layout.addWidget(self.navbar)
+
+        # ── Хедер ────────────────────────────────────────────────
         header_widget = QWidget()
+        header_widget.setStyleSheet("background-color: #ffffff; border-bottom: 1px solid #e0e0e0;")
         header_layout = QHBoxLayout(header_widget)
-        header_layout.setContentsMargins(16, 10, 16, 6)
+        header_layout.setContentsMargins(20, 12, 20, 12)
 
         self.lbl_title = QLabel("")
         self.lbl_title.setObjectName("PageTitle")
@@ -112,39 +136,61 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(header_widget)
 
-        # Контент
+        # ── Контент ──────────────────────────────────────────────
         self.content_stack = QStackedWidget()
         self.content_stack.setObjectName("ContentArea")
         main_layout.addWidget(self.content_stack, 1)
 
-        # Футер
+        # ── Футер ────────────────────────────────────────────────
         footer = QLabel("Разработал Алексей Зезюкин, 2025")
         footer.setObjectName("Footer")
         footer.setAlignment(Qt.AlignmentFlag.AlignRight)
         footer.setContentsMargins(16, 4, 16, 8)
         main_layout.addWidget(footer)
 
-    def _build_statusbar(self):
-        self.status_bar = QStatusBar()
-        self.setStatusBar(self.status_bar)
-        self.lbl_user_status = QLabel("Не авторизован")
-        self.status_bar.addPermanentWidget(self.lbl_user_status)
+    def _build_navbar(self) -> QWidget:
+        """Строит кастомную навигационную панель."""
+        navbar = QWidget()
+        navbar.setObjectName("NavBar")
+        navbar.setFixedHeight(48)
 
-    def _build_menu(self):
-        menubar = self.menuBar()
+        layout = QHBoxLayout(navbar)
+        layout.setContentsMargins(12, 0, 12, 0)
+        layout.setSpacing(0)
 
-        act_home = menubar.addAction("Главная")
-        act_home.triggered.connect(self.show_home)
+        # Название приложения
+        app_title = QLabel("⚙ СтройУправление")
+        app_title.setObjectName("NavAppTitle")
+        layout.addWidget(app_title)
 
+        # Разделитель
+        layout.addWidget(self._make_separator())
+
+        # Кнопка «Главная»
+        btn_home = QPushButton("🏠 Главная")
+        btn_home.setObjectName("NavHomeButton")
+        btn_home.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_home.clicked.connect(self.show_home)
+        layout.addWidget(btn_home)
+
+        # Разделитель
+        layout.addWidget(self._make_separator())
+
+        # Кнопки-секции из MENU_SPEC
         for section in MENU_SPEC:
-            menu = menubar.addMenu(section.label)
-            self._section_menus[section.label] = menu
+            icon = SECTION_ICONS.get(section.label, "")
+            btn_text = f"{icon} {section.label}" if icon else section.label
 
+            btn = QPushButton(btn_text)
+            btn.setObjectName("NavButton")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+            # Создаём выпадающее меню
+            menu = QMenu(btn)
             for entry in section.entries:
                 if entry.kind == "separator":
                     menu.addSeparator()
                     continue
-
                 if entry.kind == "page" and entry.key:
                     action = menu.addAction(entry.label)
                     action.setData(entry.key)
@@ -154,9 +200,52 @@ class MainWindow(QMainWindow):
                     )
                     self._menu_actions[entry.key] = action
 
-        act_settings = menubar.addAction("Настройки")
-        act_settings.triggered.connect(self._open_settings)
-        self._menu_actions["settings"] = act_settings
+            btn.setMenu(menu)
+            layout.addWidget(btn)
+
+            self._nav_buttons[section.label] = btn
+            self._nav_menus[section.label] = menu
+
+        # Растягиваем пространство
+        layout.addStretch()
+
+        # Лейбл пользователя
+        self.nav_user_label = QLabel("")
+        self.nav_user_label.setObjectName("NavUserLabel")
+        layout.addWidget(self.nav_user_label)
+
+        # Разделитель
+        layout.addWidget(self._make_separator())
+
+        # Настройки
+        self._settings_btn = QPushButton("⚙ Настройки")
+        self._settings_btn.setObjectName("NavSettingsButton")
+        self._settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._settings_btn.clicked.connect(self._open_settings)
+        layout.addWidget(self._settings_btn)
+
+        # Выход
+        self._logout_btn = QPushButton("🚪 Выход")
+        self._logout_btn.setObjectName("NavSettingsButton")
+        self._logout_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._logout_btn.clicked.connect(self._on_logout)
+        layout.addWidget(self._logout_btn)
+
+        return navbar
+
+    @staticmethod
+    def _make_separator() -> QFrame:
+        """Создаёт вертикальный разделитель."""
+        sep = QFrame()
+        sep.setObjectName("NavSeparator")
+        sep.setFrameShape(QFrame.Shape.VLine)
+        return sep
+
+    def _build_statusbar(self):
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.lbl_user_status = QLabel("Не авторизован")
+        self.status_bar.addPermanentWidget(self.lbl_user_status)
 
     # ═══════════════════════════════════════════════════════════════
     #  РЕГИСТРАЦИЯ СТРАНИЦ
@@ -183,24 +272,19 @@ class MainWindow(QMainWindow):
     # ═══════════════════════════════════════════════════════════════
 
     def _navigate_to(self, key: str):
-        # Защита от рекурсии
         if self._navigating:
             return
         self._navigating = True
-
         try:
             self._do_navigate(key)
         finally:
             self._navigating = False
 
     def _do_navigate(self, key: str):
-        """Реальная логика навигации."""
-        # Проверка аутентификации
         if not self.is_authenticated and key != "login":
             self._do_navigate("login")
             return
 
-        # Проверка прав
         required_perm = self._perm_for_key(key)
         if (
             key not in ("login", "home")
@@ -214,13 +298,11 @@ class MainWindow(QMainWindow):
             self._do_navigate("home")
             return
 
-        # Хедер
         title, hint = self._page_headers.get(
             key, (key.replace("_", " ").title(), "")
         )
         self._set_header(title, hint)
 
-        # Создаём страницу
         try:
             page = self._create_page(key)
         except Exception as e:
@@ -234,15 +316,16 @@ class MainWindow(QMainWindow):
         if page is None:
             return
 
-        # Показываем
         idx = self.content_stack.indexOf(page)
         if idx < 0:
             idx = self.content_stack.addWidget(page)
         self.content_stack.setCurrentIndex(idx)
 
+        # Скрываем/показываем навбар
+        is_login = (key == "login")
+        self.navbar.setVisible(not is_login)
+
     def _create_page(self, key: str) -> Optional[QWidget]:
-        """Создаёт виджет страницы. Удаляет старый, если был."""
-        # Удаляем старую
         old = self._pages_cache.pop(key, None)
         if old is not None:
             idx = self.content_stack.indexOf(old)
@@ -250,7 +333,6 @@ class MainWindow(QMainWindow):
                 self.content_stack.removeWidget(old)
             old.deleteLater()
 
-        # Создаём новую
         if key == "login":
             page = LoginPage()
             page.login_successful.connect(self.on_login_success)
@@ -283,17 +365,15 @@ class MainWindow(QMainWindow):
 
     def on_login_success(self, user: Dict[str, Any]):
         logger.info("Успешный вход: %s", user.get("username"))
-
         try:
             user["permissions"] = load_user_permissions(user["id"])
         except Exception as e:
             logger.exception("Не удалось загрузить права")
             QMessageBox.critical(
                 self, "Ошибка",
-                f"Не удалось загрузить права пользователя:\n{e}",
+                f"Не удалось загрузить права:\n{e}",
             )
             return
-
         self._set_user(user)
         self.show_home()
 
@@ -305,9 +385,11 @@ class MainWindow(QMainWindow):
             name = user.get("full_name") or user.get("username", "")
             self.setWindowTitle(f"{APP_NAME} — {name}")
             self.lbl_user_status.setText(f"Пользователь: {name}")
+            self.nav_user_label.setText(f"👤 {name}")
         else:
             self.setWindowTitle(APP_NAME)
             self.lbl_user_status.setText("Не авторизован")
+            self.nav_user_label.setText("")
 
         self._apply_permissions()
 
@@ -323,35 +405,60 @@ class MainWindow(QMainWindow):
         return None
 
     def _apply_permissions(self):
+        """Включает/выключает кнопки и пункты меню по правам."""
         for section in MENU_SPEC:
+            menu = self._nav_menus.get(section.label)
+            btn = self._nav_buttons.get(section.label)
+
+            any_enabled = False
+
             for entry in section.entries:
                 if entry.kind != "page" or not entry.key:
                     continue
+
                 action = self._menu_actions.get(entry.key)
                 if not action:
                     continue
+
                 if not entry.perm:
-                    action.setEnabled(True)
+                    allowed = True
                 else:
-                    action.setEnabled(self.has_perm(entry.perm))
+                    allowed = self.has_perm(entry.perm)
 
-        for section in MENU_SPEC:
-            menu = self._section_menus.get(section.label)
-            if not menu:
-                continue
-            any_enabled = any(
-                (e.kind == "page")
-                and ((not e.perm) or self.has_perm(e.perm))
-                for e in section.entries
-            )
-            menu.setEnabled(any_enabled)
+                action.setEnabled(allowed)
+                if allowed:
+                    any_enabled = True
 
-        for entry in TOP_LEVEL:
-            if not entry.perm:
-                continue
-            action = self._menu_actions.get("settings")
-            if action:
-                action.setEnabled(self.has_perm(entry.perm))
+            # Кнопка секции целиком
+            if btn:
+                btn.setEnabled(any_enabled)
+                btn.setVisible(any_enabled and self.is_authenticated)
+
+        # Настройки
+        if self._settings_btn:
+            settings_allowed = True
+            for entry in TOP_LEVEL:
+                if entry.perm:
+                    settings_allowed = self.has_perm(entry.perm)
+                    break
+            self._settings_btn.setEnabled(settings_allowed)
+            self._settings_btn.setVisible(self.is_authenticated)
+
+        # Выход
+        if self._logout_btn:
+            self._logout_btn.setVisible(self.is_authenticated)
+
+    def _on_logout(self):
+        """Обработчик кнопки Выход."""
+        answer = QMessageBox.question(
+            self,
+            "Выход",
+            "Вы уверены, что хотите выйти из системы?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self.show_login()
 
     # ═══════════════════════════════════════════════════════════════
     #  НАСТРОЙКИ
