@@ -1,0 +1,109 @@
+name: Build ConstructionSuite v2
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'main.py'
+      - 'app/**'
+      - 'main_app.spec'
+      - 'requirements.txt'
+      - '.github/workflows/build.yml'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Ручной запуск
+
+jobs:
+  build-windows:
+    name: Build Windows EXE
+    runs-on: windows-latest
+    
+    steps:
+      # 1. Клонируем репозиторий
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Устанавливаем Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # 3. Устанавливаем зависимости
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      # 4. Проверяем структуру файлов (для отладки)
+      - name: Verify project structure
+        run: |
+          echo "=== Project root ==="
+          dir /B
+          echo.
+          echo "=== app/ ==="
+          dir /B /S app\
+        shell: cmd
+
+      # 5. Проверяем импорты (быстрый тест)
+      - name: Verify imports
+        run: |
+          python -c "from app.core.logging_config import setup_logging; print('logging_config OK')"
+          python -c "from app.core.crypto import encrypt_dict, decrypt_dict; print('crypto OK')"
+          python -c "from app.core.settings_manager import settings; print('settings_manager OK')"
+          python -c "from app.core.database import db_manager; print('database OK')"
+          python -c "from app.core.auth import hash_password; print('auth OK')"
+          python -c "from app.core.user_management import hash_password; print('user_management OK')"
+          python -c "from app.menu_spec import MENU_SPEC, TOP_LEVEL; print(f'menu_spec OK: {len(MENU_SPEC)} sections')"
+          python -c "from app.splash_screen import SplashScreen; print('splash_screen OK')"
+          python -c "from app.login_page import LoginPage; print('login_page OK')"
+          python -c "from app.home_page import HomePage; print('home_page OK')"
+          python -c "from app.resources.styles import MAIN_STYLESHEET; print('styles OK')"
+          python -c "from app.dialogs.settings_dialog import SettingsDialog; print('settings_dialog OK')"
+          python -c "from app.dialogs.user_dialogs import CreateUserDialog, EditUserDialog; print('user_dialogs OK')"
+          python -c "from app.dialogs.permissions_dialog import PermissionsDialog; print('permissions_dialog OK')"
+          python -c "from app.pages.users_page import UsersPage; print('users_page OK')"
+          python -c "from app.main_window import MainWindow; print('main_window OK')"
+          echo "All imports verified successfully!"
+
+      # 6. Сборка PyInstaller
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller main_app.spec --noconfirm
+        shell: cmd
+
+      # 7. Проверяем что exe создался
+      - name: Verify build output
+        run: |
+          if exist "dist\ConstructionSuite_v2.exe" (
+            echo BUILD SUCCESS
+            dir dist\ConstructionSuite_v2.exe
+          ) else (
+            echo BUILD FAILED - exe not found
+            dir dist\ 2>nul
+            exit /b 1
+          )
+        shell: cmd
+
+      # 8. Загружаем артефакт
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ConstructionSuite_v2
+          path: dist/ConstructionSuite_v2.exe
+          retention-days: 30
+          if-no-files-found: error
+
+      # 9. Информация о сборке
+      - name: Build summary
+        run: |
+          echo "## Build Summary" >> $env:GITHUB_STEP_SUMMARY
+          echo "- **Python:** 3.11" >> $env:GITHUB_STEP_SUMMARY
+          echo "- **Platform:** Windows" >> $env:GITHUB_STEP_SUMMARY
+          echo "- **Artifact:** ConstructionSuite_v2.exe" >> $env:GITHUB_STEP_SUMMARY
+          $size = (Get-Item "dist\ConstructionSuite_v2.exe").Length / 1MB
+          echo "- **Size:** $([math]::Round($size, 2)) MB" >> $env:GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $env:GITHUB_STEP_SUMMARY
+        shell: pwsh
