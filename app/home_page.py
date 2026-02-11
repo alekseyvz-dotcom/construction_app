@@ -3,7 +3,6 @@
 """
 import base64
 import logging
-from io import BytesIO
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt
@@ -47,7 +46,9 @@ class HomePage(QWidget):
         layout.addWidget(hint)
 
     @staticmethod
-    def _load_logo(b64_data: str, max_w: int = 360, max_h: int = 360) -> QPixmap:
+    def _load_logo(
+        b64_data: str, max_w: int = 360, max_h: int = 360
+    ) -> QPixmap:
         """Загружает логотип из base64 строки."""
         try:
             raw = base64.b64decode(b64_data.strip())
@@ -62,4 +63,4 @@ class HomePage(QWidget):
             )
         except Exception as e:
             logger.error("Ошибка загрузки логотипа: %s", e)
-            
+            return QPixmap()
