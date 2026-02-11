@@ -1,4 +1,3 @@
-# main_app.spec
 # -*- mode: python ; coding: utf-8 -*-
 import os
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files
@@ -6,38 +5,20 @@ from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 block_cipher = None
 spec_dir = os.getcwd()
 
-# Сбор данных для библиотек
+# Данные библиотек
 pandas_datas = collect_data_files('pandas')
 psycopg2_datas = collect_data_files('psycopg2')
-pyside6_datas = collect_data_files('PySide6')
 
 a = Analysis(
     ['main.py'],
     pathex=[spec_dir],
     binaries=[],
     datas=[
-        # Пакет app целиком
+        # Наш пакет app
         ('app', 'app'),
-
-        # Старые модули (пока не переписаны)
-        ('meals_module.py', '.'),
-        ('meals_employees.py', '.'),
-        ('meals_reports.py', '.'),
-        ('SpecialOrders.py', '.'),
-        ('lodging_module.py', '.'),
-        ('objects.py', '.'),
-        ('timesheet_transformer.py', '.'),
-        ('virtual_timesheet_grid.py', '.'),
-        ('timesheet_compare.py', '.'),
-        ('timesheet_module.py', '.'),
-        ('employees.py', '.'),
-        ('BudgetAnalyzer.py', '.'),
-        ('employee_card.py', '.'),
-        ('analytics_module.py', '.'),
-        ('assets_logo.py', '.'),
-    ] + pandas_datas + psycopg2_datas + pyside6_datas,
+    ] + pandas_datas + psycopg2_datas,
     hiddenimports=[
-        # Новая структура
+        # === Наша структура ===
         'app',
         'app.core',
         'app.core.database',
@@ -62,45 +43,21 @@ a = Analysis(
         'app.resources',
         'app.resources.styles',
         'app.resources.logo',
-
-        # PySide6
+        # === PySide6 ===
         'PySide6.QtWidgets',
         'PySide6.QtCore',
         'PySide6.QtGui',
-
-        # Старые модули
-        'meals_module',
-        'meals_employees',
-        'meals_reports',
-        'SpecialOrders',
-        'lodging_module',
-        'objects',
-        'assets_logo',
-        'timesheet_transformer',
-        'timesheet_compare',
-        'virtual_timesheet_grid',
-        'employees',
-        'BudgetAnalyzer',
-        'timesheet_module',
-        'employee_card',
-        'analytics_module',
-
-        # Библиотеки
+        # === Библиотеки ===
         'psycopg2',
         'psycopg2.extras',
         'psycopg2.pool',
         'pandas',
         'openpyxl',
-    ] + collect_submodules('pandas') + collect_submodules('PySide6'),
+    ] + collect_submodules('pandas'),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[
-        # Исключаем tkinter — больше не нужен
-        'tkinter',
-        '_tkinter',
-        'PIL',  # Если не используется в других модулях
-    ],
+    excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
