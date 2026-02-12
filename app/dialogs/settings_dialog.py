@@ -18,7 +18,6 @@ from app.core.excel_import import (
     import_employees_from_excel,
     import_objects_from_excel,
 )
-from app.pages.users_page import UsersPage
 
 logger = logging.getLogger(__name__)
 
