@@ -195,15 +195,16 @@ class SettingsDialog(QDialog):
             self.input_sqlite.setText(path)
 
     # ── Вкладка: Пользователи ───────────────────────────────────
-
     def _build_users_tab(self):
+        from app.pages.users_page import UsersPage  # локальный импорт, чтобы не было циклических импортов
+    
         tab = QWidget()
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
-
+    
         self.users_page = UsersPage(tab)
         layout.addWidget(self.users_page)
-
+    
         self.tabs.addTab(tab, "Пользователи")
 
     # ── Вкладка: Данные (импорт) ────────────────────────────────
