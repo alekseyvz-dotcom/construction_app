@@ -25,25 +25,22 @@ def main():
 
     def start_application():
         nonlocal main_window
-
+    
         try:
             # Логирование
             splash.update_status("Инициализация логирования...")
             from app.core.logging_config import setup_logging
             log_file = setup_logging()
-
+    
             _logger = logging.getLogger(__name__)
             _logger.info("=== Запуск приложения ===")
             _logger.info("Лог-файл: %s", log_file)
-
+    
             # Настройки
             splash.update_status("Загрузка настроек...")
             from app.core.settings_manager import settings
             settings.load()
-
-            from app.pages.timesheet_create_page import TimesheetCreatePage
-            main_window.register_page("timesheet", lambda mw: TimesheetCreatePage(mw))
-
+    
             # Проверка провайдера
             provider = settings.db_provider.strip().lower()
             if provider != "postgres":
@@ -51,14 +48,14 @@ def main():
                     f"Ожидался provider=postgres, "
                     f"в настройках: {provider!r}"
                 )
-
+    
             db_url = settings.database_url.strip()
             if not db_url:
                 raise RuntimeError(
                     "В настройках не указана строка подключения "
                     "(DATABASE_URL)"
                 )
-
+    
             # Подключение к БД
             splash.update_status("Подключение к базе данных...")
             from app.core.database import db_manager
@@ -66,26 +63,28 @@ def main():
                 database_url=db_url,
                 sslmode=settings.db_sslmode,
             )
-
+    
             # Синхронизация прав
             splash.update_status("Синхронизация прав доступа...")
             from app.core.permissions import sync_permissions_from_menu_spec
             sync_permissions_from_menu_spec()
-
-            # Закрываем splash
-            splash.close()
-
-            # Запуск главного окна
-            _logger.info("Запуск главного окна.")
+    
+            # Создаём главное окно (ВАЖНО: ДО register_page нельзя)
+            splash.update_status("Запуск главного окна...")
             from app.main_window import MainWindow
             main_window = MainWindow()
+    
+            # Регистрируем страницы
+            from app.pages.timesheet_create_page import TimesheetCreatePage
+            main_window.register_page("timesheet", lambda mw: TimesheetCreatePage(mw))
+    
+            # Закрываем splash и показываем окно
+            splash.close()
             main_window.show()
-
+    
         except Exception as e:
             splash.close()
-            logging.critical(
-                "Ошибка инициализации", exc_info=True,
-            )
+            logging.critical("Ошибка инициализации", exc_info=True)
             QMessageBox.critical(
                 None,
                 "Критическая ошибка",
