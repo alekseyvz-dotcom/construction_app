@@ -41,6 +41,9 @@ def main():
             from app.core.settings_manager import settings
             settings.load()
 
+            from app.pages.timesheet_create_page import TimesheetCreatePage
+            main_window.register_page("timesheet", lambda mw: TimesheetCreatePage(mw))
+
             # Проверка провайдера
             provider = settings.db_provider.strip().lower()
             if provider != "postgres":
